@@ -1,80 +1,208 @@
+#run and test to see if complete, complete comments, readme file, github and commits
 import tkinter as tk
 import random
+import os
+from tkinter import simpledialog
 
 class HangmanGame:
     def __init__(self, root):
         self.root = root
         self.root.title("Hangman Game")
+        self.root.geometry("800x650")
+        self.root.configure(bg='#F0F0F0')
         
-        # Initialize game variables
-        self.words = ["python", "programming", "computer", "science", "algorithm", "database", "network"]
-        self.word = random.choice(self.words)
-        self.word_letters = set(self.word)
-        self.alphabet = set('abcdefghijklmnopqrstuvwxyz')
-        self.used_letters = set()
+        # Game variables
+        self.words = ["PYTHON", "PROGRAMMING", "COMPUTER", "SCIENCE", "ALGORITHM"]
+        self.secret_word = random.choice(self.words)
+        self.correct_guesses = set()
+        self.incorrect_guesses = set()
         self.lives = 6
         self.score = 0
+        self.high_scores = []
         
-        # Create GUI components
-        self.score_label = tk.Label(root, text=f"Score: {self.score}", font=("Arial", 16))
-        self.score_label.pack(pady=10)
+        # File handling initialization
+        self.score_file = "scores.txt"
+        self.load_high_scores()  # Test case 1: Load existing scores
         
-        self.lives_label = tk.Label(root, text=f"Lives: {self.lives}", font=("Arial", 16))
-        self.lives_label.pack(pady=10)
+        # GUI components
+        self.create_widgets()
         
-        self.word_label = tk.Label(root, text="Word: " + " ".join(["-" for _ in self.word]), font=("Arial", 16))
-        self.word_label.pack(pady=10)
-        
-        self.entry_label = tk.Label(root, text="Enter a letter:", font=("Arial", 14))
-        self.entry_label.pack(pady=5)
-        
-        self.entry = tk.Entry(root, font=("Arial", 14))
-        self.entry.pack(pady=5)
-        
-        self.submit_button = tk.Button(root, text="Submit", command=self.check_letter)
-        self.submit_button.pack(pady=10)
-        
-        self.message_label = tk.Label(root, text="", font=("Arial", 12), fg="red")
-        self.message_label.pack(pady=10)
+        # Initialize hangman drawing stages
+        self.hangman_parts = [
+            self.draw_head, self.draw_body, 
+            self.draw_left_arm, self.draw_right_arm,
+            self.draw_left_leg, self.draw_right_leg
+        ]
 
-    def check_letter(self):
-        user_letter = self.entry.get().lower()
-        self.entry.delete(0, tk.END)  # Clear the input field
+    def create_widgets(self):
+        """Initialize all GUI components with modern styling"""
+        # Scoreboard frame
+        score_frame = tk.Frame(self.root, bg='#F0F0F0')
+        score_frame.pack(pady=10)
         
-        if user_letter in (self.alphabet - self.used_letters):
-            self.used_letters.add(user_letter)
-            if user_letter in self.word_letters:
-                self.word_letters.remove(user_letter)
-                # Update score
-                self.score += 10
-                self.message_label.config(text=f"Good guess! '{user_letter}' is in the word.")
-            else:
-                # Reduce lives
-                self.lives -= 1
-                self.message_label.config(text=f"Wrong guess! '{user_letter}' is not in the word.")
+        self.score_label = tk.Label(score_frame, text=f"Score: {self.score}", 
+                                  font=("Arial", 14, 'bold'), bg='#F0F0F0')
+        self.score_label.pack(side=tk.LEFT, padx=20)
+        
+        self.lives_label = tk.Label(score_frame, text=f"Lives: {self.lives}", 
+                                  font=("Arial", 14, 'bold'), bg='#F0F0F0')
+        self.lives_label.pack(side=tk.LEFT, padx=20)
+        
+        # Hangman canvas
+        self.canvas = tk.Canvas(self.root, width=300, height=300, bg='white')
+        self.canvas.pack(pady=20)
+        
+        # Word display
+        self.word_display = tk.Label(self.root, text="_ " * len(self.secret_word), 
+                                   font=("Courier", 24), bg='#F0F0F0')
+        self.word_display.pack(pady=10)
+        
+        # Keyboard buttons
+        self.create_keyboard()
+        
+        # High scores display
+        self.highscore_label = tk.Label(self.root, text="Top Scores:\n" + self.get_top_scores(), 
+                                      font=("Arial", 12), bg='#F0F0F0')
+        self.highscore_label.pack(pady=10)
+
+    def create_keyboard(self):
+        """Create alphabetical keyboard buttons"""
+        button_frame = tk.Frame(self.root, bg='#F0F0F0')
+        button_frame.pack(pady=10)
+        
+        for i, letter in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
+            btn = tk.Button(button_frame, text=letter, width=3, font=("Arial", 10, 'bold'),
+                          command=lambda l=letter: self.process_guess(l),
+                          state=tk.NORMAL, bg='#4a7a8c', fg='white')
+            btn.grid(row=i//7, column=i%7, padx=2, pady=2)
+
+    # ----------------------
+    # Game Logic & File Handling
+    # ----------------------
+    
+    def load_high_scores(self):
+        """Load high scores from file with error handling"""
+        try:
+            if not os.path.exists(self.score_file):
+                open(self.score_file, 'w').close()  # Test case 2: Create new file
+                
+            with open(self.score_file, 'r') as f:
+                for line in f:
+                    name, score = line.strip().split(':')
+                    self.high_scores.append((name, int(score)))
+                self.bubble_sort_scores()
+        except Exception as e:
+            print(f"Error loading scores: {e}")
+
+    def save_high_score(self):
+        """Save current score to file with bubble sort"""
+        name = simpledialog.askstring("High Score", "Enter your name:")
+        if name:
+            self.high_scores.append((name, self.score))
+            self.bubble_sort_scores()
+            self.high_scores = self.high_scores[:5]  # Keep top 5
             
-            # Update GUI components
-            word_list = [letter if letter in self.used_letters else "-" for letter in self.word]
-            self.word_label.config(text="Word: " + " ".join(word_list))
-            self.lives_label.config(text=f"Lives: {self.lives}")
-            self.score_label.config(text=f"Score: {self.score}")
-            
-            # Check if game is over
-            if len(self.word_letters) == 0:
-                self.message_label.config(text=f"Congratulations! You guessed the word '{self.word}'!")
-                self.submit_button.config(state=tk.DISABLED)  # Disable further inputs
-            elif self.lives == 0:
-                self.message_label.config(text=f"Game Over! The word was '{self.word}'.")
-                self.submit_button.config(state=tk.DISABLED)  # Disable further inputs
-        
-        elif user_letter in self.used_letters:
-            self.message_label.config(text="You have already guessed that letter. Try again.")
-        
+            try:
+                with open(self.score_file, 'w') as f:
+                    for name, score in self.high_scores:
+                        f.write(f"{name}:{score}\n")
+                self.highscore_label.config(text="Top Scores:\n" + self.get_top_scores())
+            except Exception as e:
+                print(f"Error saving scores: {e}")
+
+    def bubble_sort_scores(self):
+        """Bubble sort implementation for high scores"""
+        n = len(self.high_scores)
+        for i in range(n):
+            for j in range(0, n-i-1):
+                if self.high_scores[j][1] < self.high_scores[j+1][1]:
+                    self.high_scores[j], self.high_scores[j+1] = self.high_scores[j+1], self.high_scores[j]
+
+    def get_top_scores(self):
+        """Return formatted top scores string"""
+        return '\n'.join([f"{name}: {score}" for name, score in self.high_scores])
+
+    # ----------------------
+    # Game Mechanics
+    # ----------------------
+    
+    def process_guess(self, letter):
+        """Handle letter guessing logic"""
+        letter = letter.lower()
+        if letter in self.secret_word.lower():
+            self.correct_guesses.add(letter)
+            self.score += 10
         else:
-            self.message_label.config(text="Invalid character. Please enter a valid letter.")
+            self.incorrect_guesses.add(letter)
+            self.lives -= 1
+            self.draw_hangman()
+            
+        self.update_display()
+        self.check_game_over()
 
-# Run the game
+    def update_display(self):
+        """Update all game displays"""
+        self.score_label.config(text=f"Score: {self.score}")
+        self.lives_label.config(text=f"Lives: {self.lives}")
+        
+        displayed_word = " ".join([c if c in self.correct_guesses else "_" 
+                                 for c in self.secret_word.lower()])
+        self.word_display.config(text=displayed_word.upper())
+
+    def check_game_over(self):
+        """Check win/lose conditions"""
+        if all(c in self.correct_guesses for c in self.secret_word.lower()):
+            self.save_high_score()
+            self.show_message("You Win!", "green")
+        elif self.lives <= 0:
+            self.show_message(f"Game Over! Word: {self.secret_word}", "red")
+
+    def show_message(self, message, color):
+        """Display game end message"""
+        for child in self.root.winfo_children():
+            if isinstance(child, tk.Button):
+                child.config(state=tk.DISABLED)
+                
+        tk.Label(self.root, text=message, font=("Arial", 18, 'bold'), 
+                fg=color, bg='#F0F0F0').pack(pady=10)
+        tk.Button(self.root, text="New Game", command=self.reset_game, 
+                 bg='#4a7a8c', fg='white').pack(pady=10)
+
+    def reset_game(self):
+        """Reset game state"""
+        self.root.destroy()
+        HangmanGame(tk.Tk())
+
+    # ----------------------
+    # Hangman Drawing
+    # ----------------------
+    
+    def draw_hangman(self):
+        """Draw hangman based on incorrect guesses"""
+        self.canvas.delete("all")
+        for i in range(len(self.incorrect_guesses)):
+            if i < len(self.hangman_parts):
+                self.hangman_parts[i]()
+
+    def draw_head(self):
+        self.canvas.create_oval(125, 50, 185, 110, width=3)
+    
+    def draw_body(self):
+        self.canvas.create_line(155, 110, 155, 170, width=3)
+    
+    def draw_left_arm(self):
+        self.canvas.create_line(155, 130, 125, 150, width=3)
+    
+    def draw_right_arm(self):
+        self.canvas.create_line(155, 130, 185, 150, width=3)
+    
+    def draw_left_leg(self):
+        self.canvas.create_line(155, 170, 125, 200, width=3)
+    
+    def draw_right_leg(self):
+        self.canvas.create_line(155, 170, 185, 200, width=3)
+
 if __name__ == "__main__":
     root = tk.Tk()
-    game = HangmanGame(root)
+    HangmanGame(root)
     root.mainloop()
